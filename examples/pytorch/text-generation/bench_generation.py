@@ -350,6 +350,7 @@ def main():
     #     action=argparse.BooleanOptionalAction,
     #     help="Toggle so that kv cache is not used",
     # )
+    parser.add_argument("--device_map", type=str, default=None, help="Hugging Face Accelerate device_map configuration")
     parser.add_argument("--use_cache", type=str, default="True", help="Toggle kv caching")
     parser.add_argument("--cache_dir", type=str, default="/data", help="Directory for Hugging Face model and dataset cache")
     parser.add_argument("--n_warmup_runs", type=int, default=1, help="Number of warmup runs")
@@ -399,7 +400,7 @@ def main():
     tokenizer = tokenizer_class.from_pretrained(args.model_name_or_path)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    model = model_class.from_pretrained(args.model_name_or_path, torch_dtype=args.torch_dtype, use_cache=args.use_cache, cache_dir=args.cache_dir)
+    model = model_class.from_pretrained(args.model_name_or_path, torch_dtype=args.torch_dtype, use_cache=args.use_cache, cache_dir=args.cache_dir, device_map=args.device_map)
 
     # Set the model to the right device
     model.to(distributed_state.device)
