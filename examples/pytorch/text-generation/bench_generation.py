@@ -17,7 +17,7 @@
 """ Conditional text generation with the auto-regressive models of the library (GPT/GPT-2/CTRL/Transformer-XL/XLNet)
 
 Example usage:
-    python run_generation.py --model_type llama --model_name_or_path meta-llama/Llama-2-13b-chat-hf --torch_dtype float16 --seed 42
+    python bench_generation.py --model_type llama --model_name_or_path meta-llama/Llama-2-13b-chat-hf --torch_dtype float16 --seed 42
 """
 
 
@@ -351,7 +351,7 @@ def main():
     #     action=argparse.BooleanOptionalAction,
     #     help="Toggle so that kv cache is not used",
     # )
-    parser.add_argument("--device_map", type=str, default=typing.Optional[typing.Union[int, str]], help="Hugging Face Accelerate device_map configuration")
+    parser.add_argument("--device_map", type=typing.Optional[typing.Union[int, str]], default=None, help="Hugging Face Accelerate device_map configuration")
     parser.add_argument("--use_cache", type=str, default="True", help="Toggle kv caching")
     parser.add_argument("--cache_dir", type=str, default="/data", help="Directory for Hugging Face model and dataset cache")
     parser.add_argument("--n_warmup_runs", type=int, default=1, help="Number of warmup runs")
