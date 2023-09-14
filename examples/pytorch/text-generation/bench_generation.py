@@ -25,6 +25,7 @@ import argparse
 import inspect
 import logging
 from typing import Tuple
+import typing
 
 import torch
 from accelerate import PartialState
@@ -350,7 +351,7 @@ def main():
     #     action=argparse.BooleanOptionalAction,
     #     help="Toggle so that kv cache is not used",
     # )
-    parser.add_argument("--device_map", type=str, default=None, help="Hugging Face Accelerate device_map configuration")
+    parser.add_argument("--device_map", type=str, default=typing.Optional[typing.Union[int, str]], help="Hugging Face Accelerate device_map configuration")
     parser.add_argument("--use_cache", type=str, default="True", help="Toggle kv caching")
     parser.add_argument("--cache_dir", type=str, default="/data", help="Directory for Hugging Face model and dataset cache")
     parser.add_argument("--n_warmup_runs", type=int, default=1, help="Number of warmup runs")
