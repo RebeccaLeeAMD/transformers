@@ -351,7 +351,7 @@ def main():
     #     action=argparse.BooleanOptionalAction,
     #     help="Toggle so that kv cache is not used",
     # )
-    parser.add_argument("--device_map", type=typing.Union[int, str, None], default=None, help="Hugging Face Accelerate device_map configuration")
+    parser.add_argument("--device_map", type=str, default=None, help="Hugging Face Accelerate device_map configuration")
     parser.add_argument("--use_cache", type=str, default="True", help="Toggle kv caching")
     parser.add_argument("--cache_dir", type=str, default="/data", help="Directory for Hugging Face model and dataset cache")
     parser.add_argument("--n_warmup_runs", type=int, default=1, help="Number of warmup runs")
@@ -382,6 +382,10 @@ def main():
         args.use_cache = False
     else:
         args.use_cache = True
+    
+    # Format device_map
+    if args.device_map and args.device_map.isdigit():
+        args.device_map = int(args.device_map)
 
     # Initialize the distributed state.
     distributed_state = PartialState(cpu=args.use_cpu)
