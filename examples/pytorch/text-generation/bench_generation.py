@@ -390,7 +390,7 @@ def main():
     # Initialize the distributed state.
     distributed_state = PartialState(cpu=args.use_cpu)
     if args.device_map is None:
-        my_device = distributed_state
+        my_device = distributed_state.device
     elif isinstance(args.device_map, int):
         my_device = f"cuda:{args.device_map}"
     else:
