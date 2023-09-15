@@ -389,6 +389,12 @@ def main():
 
     # Initialize the distributed state.
     distributed_state = PartialState(cpu=args.use_cpu)
+    if args.device_map is None:
+        my_device = distributed_state
+    elif isinstance(args.device_map, int):
+        my_device = f"cuda:{args.device_map}"
+    else:
+        my_device = None
 
     logger.warning(f"device: {distributed_state.device}, 16-bits inference: {args.fp16}")
 
@@ -408,7 +414,8 @@ def main():
     model = model_class.from_pretrained(args.model_name_or_path, torch_dtype=args.torch_dtype, use_cache=args.use_cache, cache_dir=args.cache_dir, device_map=args.device_map)
 
     # Set the model to the right device
-    model.to(distributed_state.device)
+    if my_device:
+        model.to(my_device)
 
     if args.fp16:
         model.half()
@@ -459,7 +466,7 @@ def main():
         else:
             prefix = args.prefix if args.prefix else args.padding_text
             encoded_prompt = tokenizer.encode(prefix + prompt_text, add_special_tokens=False, return_tensors="pt")
-        encoded_prompt = encoded_prompt.to(distributed_state.device)
+        encoded_prompt = encoded_prompt.to(my_device)
 
         if encoded_prompt.size()[-1] == 0:
             input_ids = None
