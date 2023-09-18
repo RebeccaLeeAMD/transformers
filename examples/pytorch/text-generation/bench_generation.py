@@ -528,7 +528,7 @@ def main():
         }
         record["tokens_per_second"] = record["total_tokens"] / record["latency"]
         if args.output_sequences:
-            record["output_sequences"] = output_sequences
+            record["output_sequences"] = output_sequences.tolist()
             record["outputs"] = generated_sequences
         
         records.append(record)
