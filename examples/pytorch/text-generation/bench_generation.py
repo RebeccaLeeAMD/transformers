@@ -56,20 +56,33 @@ from transformers import (
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
 import os
+import sys
 import time
 import json
 from tqdm import tqdm
 import statistics
 
 
-logging.basicConfig(
-    format="%(asctime)s.%(msecs)03d - %(levelname)s - %(name)s - %(message)s",
-    datefmt="%m/%d/%Y %H:%M:%S",
-    level=logging.DEBUG,
-    filename='bench_generation.log',
-    filemode='w',
-)
+# Set up logging
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+# Logging file handler
+fh = logging.FileHandler(filename='bench_generation.log', mode='w')
+fh.setLevel(logging.DEBUG)
+# Logging console handler
+ch = logging.StreamHandler(sys.stdout)
+ch.setLevel(logging.DEBUG)
+# Add formatter to handlers
+formatter = logging.Formatter(
+    fmt="%(asctime)s.%(msecs)03d - %(levelname)s - %(name)s - %(message)s",
+    datefmt="%m/%d/%Y %H:%M:%S",
+)
+fh.setFormatter(formatter)
+ch.setFormatter(formatter)
+# Add handlers to logger
+logger.addHandler(ch)
+logger.addHandler(fh)
+
 
 MAX_LENGTH = int(10000)  # Hardcoded max length to avoid infinite loop
 
@@ -375,6 +388,11 @@ def main():
     parser.add_argument("--max_new_tokens", type=int, default=None, help="Maimum new tokens generated")
     parser.add_argument("--min_new_tokens", type=int, default=None, help="Minimum new tokens generated")
     parser.add_argument("--preset_prompt", type=str, default=None, help="Preset prompt")
+    parser.add_argument(
+        "--print_records",
+        action="store_true",
+        help="Whether to print output records",
+        )
     #
     args = parser.parse_args()
 
@@ -587,6 +605,17 @@ def main():
     }
 
     print(f"Metrics for bench_generation.py: {metrics}")
+
+    if args.print_records:
+        print()
+        print("---------------------------------------------------------------")
+        logger.info("Print records - start")
+        print("records")
+        print("----")
+        print(records)
+        print("----")
+        logger.info("Print records - end")
+        print("---------------------------------------------------------------")
 
 
     logger.debug("Benchmark - end")
