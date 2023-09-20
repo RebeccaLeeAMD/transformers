@@ -59,6 +59,7 @@ import os
 import time
 import json
 from tqdm import tqdm
+import statistics
 
 
 logging.basicConfig(
@@ -369,7 +370,8 @@ def main():
         action="store_true",
         help="Whether to use the same random seed for each inference",
         )
-    parser.add_argument("--output_file", type=str, default="records.json", help="Filename for generated output data")
+    parser.add_argument("--records_file", type=str, default="records.json", help="Filename for generated output data records")
+    parser.add_argument("--metrics_file", type=str, default="metrics.json", help="Filename for generated output data metrics")
     parser.add_argument("--max_new_tokens", type=int, default=None, help="Maimum new tokens generated")
     parser.add_argument("--min_new_tokens", type=int, default=None, help="Minimum new tokens generated")
     parser.add_argument("--preset_prompt", type=str, default=None, help="Preset prompt")
@@ -556,35 +558,48 @@ def main():
 
         logger.debug(f"Benchmark - Iteration[{i}] - end")
 
+        input_sequences = input_ids.to('cpu').detach().numpy().tolist()
+        
+        # Populate records
         record = {
             "latency": runtime,
+            "warmup": True if i < args.n_warmup_runs else False,
+            "input_lengths": [len(seq) for seq in input_sequences],
+            "output_lengths": [len(seq) for seq in output_sequences],
             "total_tokens": sum([len(output_sequence) for output_sequence in output_sequences]),
             "batch_size": len(output_sequences),
             "max_length": max_length,
             "max_new_tokens": args.max_new_tokens,
-            "min_new_tokens": args.min_new_tokens,
-            "output_lengths": [len(seq) for seq in output_sequences],
+            "min_new_tokens": args.min_new_tokens,            
         }
         record["tokens_per_second"] = record["total_tokens"] / record["latency"]
         if args.output_sequences:
-            record["output_sequences"] = output_sequences.tolist()
-            record["outputs"] = generated_sequences
-            #
             record["input_sequences"] = input_ids.to('cpu').detach().numpy().tolist()
-            record["input_lengths"] = [len(seq) for seq in record["input_sequences"]]
+            record["output_sequences"] = output_sequences.tolist()
+            record["outputs"] = generated_sequences            
         
         records.append(record)
 
+    # Populate metrics
+    metrics = {
+        "median_warmup_tokens_per_second": statistics.median( [rec['tokens_per_second'] for rec in records if rec["warmup"]==True] ),
+        "median_tokens_per_second": statistics.median( [rec['tokens_per_second'] for rec in records if rec["warmup"]==False] ),
+    }
+
+    print(f"Metrics for bench_generation.py: {metrics}")
+
+
     logger.debug("Benchmark - end")
 
-    print()
-    print("records:")
-    print(records)
 
     # Save output data to file
-    with open(args.output_file, "w") as fp:
+    with open(args.records_file, "w") as fp:
         json.dump(records, fp)
-        logger.info(f"Output records written to {args.output_file}")
+        logger.info(f"Output records written to {args.records_file}")
+    
+    with open(args.metrics_file, "w") as fp:
+        json.dump(metrics, fp)
+        logger.info(f"Output metrics written to {args.metrics_file}")
 
     return records
 
