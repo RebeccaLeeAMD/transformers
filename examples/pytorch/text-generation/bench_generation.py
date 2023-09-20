@@ -55,15 +55,18 @@ from transformers import (
 )
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
+import os
 import time
 import json
 from tqdm import tqdm
 
 
 logging.basicConfig(
-    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+    format="%(asctime)s.%(msecs)03d - %(levelname)s - %(name)s - %(message)s",
     datefmt="%m/%d/%Y %H:%M:%S",
-    level=logging.INFO,
+    level=logging.DEBUG,
+    filename='bench_generation.log',
+    filemode='w',
 )
 logger = logging.getLogger(__name__)
 
@@ -367,6 +370,10 @@ def main():
         help="Whether to use the same random seed for each inference",
         )
     parser.add_argument("--output_file", type=str, default="records.json", help="Filename for generated output data")
+    parser.add_argument("--max_new_tokens", type=int, default=None, help="Maimum new tokens generated")
+    parser.add_argument("--min_new_tokens", type=int, default=None, help="Minimum new tokens generated")
+    parser.add_argument("--preset_prompt", type=str, default=None, help="Preset prompt")
+    #
     args = parser.parse_args()
 
     # Set torch_dtype
@@ -386,6 +393,16 @@ def main():
     # Format device_map
     if args.device_map and args.device_map.isdigit():
         args.device_map = int(args.device_map)
+    
+    # Preset prompt
+    if args.preset_prompt:
+        prompt_file = os.path.abspath(os.path.join(os.path.dirname(__file__), f'prompts/{args.preset_prompt}.txt'))
+        if not os.path.isfile(prompt_file):
+            raise ValueError(f"Prompt file does not exist: {prompt_file}")
+        
+        with open(prompt_file, 'r') as file:
+            args.prompt = file.read()
+
 
     # Initialize the distributed state.
     distributed_state = PartialState(cpu=args.use_cpu)
@@ -411,7 +428,10 @@ def main():
     tokenizer = tokenizer_class.from_pretrained(args.model_name_or_path)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    model = model_class.from_pretrained(args.model_name_or_path, torch_dtype=args.torch_dtype, use_cache=args.use_cache, cache_dir=args.cache_dir, device_map=args.device_map)
+    
+    logger.debug(f"Model - Load - start")
+    # model = model_class.from_pretrained(args.model_name_or_path, torch_dtype=args.torch_dtype, use_cache=args.use_cache, cache_dir=args.cache_dir, device_map=args.device_map)
+    model = model_class.from_pretrained(args.model_name_or_path, torch_dtype=args.torch_dtype, cache_dir=args.cache_dir, device_map=args.device_map)
 
     # Set the model to the right device
     if my_device:
@@ -419,6 +439,8 @@ def main():
 
     if args.fp16:
         model.half()
+    logger.debug(f"Model - Load - end")
+    
     max_seq_length = getattr(model.config, "max_position_embeddings", 0)
     args.length = adjust_length_to_model(args.length, max_sequence_length=max_seq_length)
     logger.info(args)
@@ -446,11 +468,14 @@ def main():
 
     # Benchmark
     records = []
+    logger.debug("Benchmark - start")
     for i in tqdm(range(args.n_warmup_runs + args.n_runs)):
+        logger.debug(f"Benchmark - Iteration[{i}] - start")
         start_time = time.time()
 
         # Different models need different input formatting and/or extra arguments
         # Tokenize input prompt       
+        logger.debug(f"Benchmark - Iteration[{i}] - Tokenize - start")
         if requires_preprocessing:
             prepare_input = PREPROCESSING_FUNCTIONS.get(args.model_type)
             preprocessed_prompt_text = prepare_input(args, model, tokenizer, prompt_text)
@@ -467,6 +492,7 @@ def main():
             prefix = args.prefix if args.prefix else args.padding_text
             encoded_prompt = tokenizer.encode(prefix + prompt_text, add_special_tokens=False, return_tensors="pt")
         encoded_prompt = encoded_prompt.to(my_device)
+        logger.debug(f"Benchmark - Iteration[{i}] - Tokenize - end")
 
         if encoded_prompt.size()[-1] == 0:
             input_ids = None
@@ -478,9 +504,14 @@ def main():
         # Run inference
         if args.same_seed:
             set_seed(args.seed)
+        
+        logger.debug(f"Benchmark - Iteration[{i}] - Generate - start")
         output_sequences = model.generate(
+            use_cache=args.use_cache,
             input_ids=input_ids,
             max_length=max_length,
+            max_new_tokens=args.max_new_tokens,
+            min_new_tokens=args.min_new_tokens,
             temperature=args.temperature,
             top_k=args.k,
             top_p=args.p,
@@ -488,7 +519,9 @@ def main():
             do_sample=True,
             num_return_sequences=args.num_return_sequences,
         )
+        logger.debug(f"Benchmark - Iteration[{i}] - Generate - end")
         
+        logger.debug(f"Benchmark - Iteration[{i}] - De-tokenize - start")
         # output_sequences = output_sequences.to('cpu')
         output_sequences = output_sequences.to('cpu').detach().numpy()
 
@@ -516,22 +549,33 @@ def main():
 
             generated_sequences.append(total_sequence)
             # print(total_sequence)
-        
+        logger.debug(f"Benchmark - Iteration[{i}] - De-tokenize - end")
+
         end_time = time.time()
         runtime = end_time - start_time
+
+        logger.debug(f"Benchmark - Iteration[{i}] - end")
 
         record = {
             "latency": runtime,
             "total_tokens": sum([len(output_sequence) for output_sequence in output_sequences]),
             "batch_size": len(output_sequences),
             "max_length": max_length,
+            "max_new_tokens": args.max_new_tokens,
+            "min_new_tokens": args.min_new_tokens,
+            "output_lengths": [len(seq) for seq in output_sequences],
         }
         record["tokens_per_second"] = record["total_tokens"] / record["latency"]
         if args.output_sequences:
             record["output_sequences"] = output_sequences.tolist()
             record["outputs"] = generated_sequences
+            #
+            record["input_sequences"] = input_ids.to('cpu').detach().numpy().tolist()
+            record["input_lengths"] = [len(seq) for seq in record["input_sequences"]]
         
         records.append(record)
+
+    logger.debug("Benchmark - end")
 
     print()
     print("records:")
@@ -545,4 +589,6 @@ def main():
 
 
 if __name__ == "__main__":
+    logger.debug("Main - start")
     main()
+    logger.debug("Main - end")
