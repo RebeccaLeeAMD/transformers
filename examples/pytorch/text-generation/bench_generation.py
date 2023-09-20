@@ -584,6 +584,7 @@ def main():
     # Save output data to file
     with open(args.output_file, "w") as fp:
         json.dump(records, fp)
+        logger.info(f"Output records written to {args.output_file}")
 
     return records
 
